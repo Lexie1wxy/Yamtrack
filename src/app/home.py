@@ -1,6 +1,6 @@
 from django.utils.text import slugify
 
-from app.models import BasicMedia, Status
+from app.models import BasicMedia, MediaTypes, Status
 
 
 def build_home_section(key, media_types):
@@ -50,6 +50,67 @@ def get_home_media_types(
         items_limit,
         page_start=items_limit if specific_media_type else 0,
     )
+
+
+def get_home_tv_media_types(
+    request,
+    sort_by,
+    section_key,
+    items_limit,
+    *,
+    page_start=0,
+    hide_unreleased=False,
+):
+    """Return deduplicated TV Shows plus non-duplicate TV Seasons."""
+    tv_media_types = BasicMedia.objects.get_home_status(
+        user=request.user,
+        status=section_key,
+        sort_by=sort_by,
+        items_limit=None,
+        specific_media_type=MediaTypes.TV.value,
+    )
+    season_media_types = BasicMedia.objects.get_home_status(
+        user=request.user,
+        status=section_key,
+        sort_by=sort_by,
+        items_limit=None,
+        specific_media_type=MediaTypes.SEASON.value,
+    )
+    tv_items = tv_media_types.get(MediaTypes.TV.value, {}).get("items", [])
+    season_items = season_media_types.get(MediaTypes.SEASON.value, {}).get(
+        "items",
+        [],
+    )
+
+    combined = list(tv_items)
+    seen = {(item.item.media_id, None) for item in tv_items}
+    for season in season_items:
+        season_number = season.item.season_number
+        if season_number in (None, 1):
+            key = (season.item.media_id, None)
+        else:
+            key = (season.item.media_id, season_number)
+        if key in seen:
+            continue
+        seen.add(key)
+        combined.append(season)
+
+    if hide_unreleased:
+        combined = [
+            media
+            for media in combined
+            if _is_released_home_media(media, section_key)
+        ]
+
+    combined = BasicMedia.objects._sort_home_media(combined, sort_by)
+    total_count = len(combined)
+    page_end = None if items_limit is None else page_start + items_limit
+    return {
+        MediaTypes.TV.value: {
+            "items": combined[page_start:page_end],
+            "total": total_count,
+        },
+    }
 
 
 def _filter_home_media_types(media_types, predicate):

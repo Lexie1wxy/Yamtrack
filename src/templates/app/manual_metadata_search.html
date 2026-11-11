@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% load app_tags %}
+{% load i18n %}
+
+{% block title %}
+  Advanced Search - Yamtrack
+{% endblock title %}
+
+{% block content %}
+  <div class="mx-auto max-w-6xl">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold mb-2">{% trans "Advanced Search" %}</h1>
+      <p class="text-gray-400">
+        {% trans "Search your local library by category, screenwriter, director, or lead actor." %}
+      </p>
+    </div>
+
+    <form method="get"
+          action="{% url 'manual_metadata_search' %}"
+          class="bg-[#2a2f35] rounded-lg p-5 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))_auto] gap-4 items-end">
+        <label class="block">
+          <span class="block text-sm font-medium text-gray-300 mb-2">{% trans "Keyword" %}</span>
+          <input type="search"
+                 name="q"
+                 value="{{ query }}"
+                 autofocus
+                 placeholder="{% trans 'Enter a name or category' %}"
+                 class="w-full rounded-md bg-[#39404b] border border-gray-600 px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </label>
+
+        <label class="block">
+          <span class="block text-sm font-medium text-gray-300 mb-2">{% trans "Search field" %}</span>
+          <select name="field"
+                  class="w-full rounded-md bg-[#39404b] border border-gray-600 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            {% for value, label in field_options %}
+              <option value="{{ value }}" {% if field == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="block text-sm font-medium text-gray-300 mb-2">{% trans "Media type" %}</span>
+          <select name="media_type"
+                  class="w-full rounded-md bg-[#39404b] border border-gray-600 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            {% for value, label in media_type_options %}
+              <option value="{{ value }}" {% if media_type_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="block text-sm font-medium text-gray-300 mb-2">{% trans "Status" %}</span>
+          <select name="status"
+                  class="w-full rounded-md bg-[#39404b] border border-gray-600 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            {% for value, label in status_choices %}
+              <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <div class="flex gap-2">
+          <button type="submit"
+                  class="rounded-md bg-indigo-600 px-5 py-2 text-white font-medium hover:bg-indigo-700 transition-colors cursor-pointer">
+            {% trans "Search" %}
+          </button>
+          <a href="{% url 'manual_metadata_search' %}"
+             class="rounded-md bg-[#39404b] px-4 py-2 text-gray-300 hover:bg-[#454d5a] hover:text-white transition-colors">
+            {% trans "Reset" %}
+          </a>
+        </div>
+      </div>
+    </form>
+
+    {% if query %}
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-sm text-gray-400">
+          {{ total_results }} {% blocktrans count count=total_results %}result{% plural %}results{% endblocktrans %}
+        </p>
+        <p class="text-sm text-gray-500">{{ query }}</p>
+      </div>
+
+      {% if results %}
+        <div class="space-y-3">
+          {% for result in results %}
+            <div class="rounded-lg bg-[#2a2f35] p-4 hover:bg-[#30363d] transition-colors">
+              <div class="flex gap-4">
+                <a href="{{ result.item|media_url }}" class="shrink-0">
+                  <img alt="{{ result.item }}"
+                       class="h-28 w-20 rounded-md bg-[#39404b] object-cover"
+                       src="{{ result.item.image }}">
+                </a>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
+                    <div>
+                      <a href="{{ result.item|media_url }}"
+                         class="text-lg font-semibold text-white hover:text-indigo-400 transition-colors">
+                        {{ result.item }}
+                      </a>
+                      <div class="mt-1 flex flex-wrap gap-1.5">
+                        {% for genre in result.genres %}
+                          <span class="rounded-full bg-violet-600/80 px-2 py-0.5 text-xs text-white">{{ genre }}</span>
+                        {% endfor %}
+                      </div>
+                    </div>
+                    <span class="rounded-full bg-[#39404b] px-2.5 py-1 text-xs text-gray-300">
+                      {{ result.media.status|media_status_readable }}
+                    </span>
+                  </div>
+                  <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                    <p class="text-gray-400">
+                      <span class="font-medium text-gray-300">{% trans "Screenwriter" %}:</span>
+                      {{ result.screenwriters|default:"-" }}
+                    </p>
+                    <p class="text-gray-400">
+                      <span class="font-medium text-gray-300">{% trans "Director" %}:</span>
+                      {{ result.directors|default:"-" }}
+                    </p>
+                    <p class="text-gray-400 lg:col-span-2">
+                      <span class="font-medium text-gray-300">{% trans "Lead actors" %}:</span>
+                      {{ result.actors|default:"-" }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+
+        {% if page.paginator.num_pages > 1 %}
+          <div class="mt-8 flex items-center justify-center gap-3">
+            {% if page.has_previous %}
+              <a href="?{{ query_without_page }}{% if query_without_page %}&{% endif %}page={{ page.previous_page_number }}"
+                 class="rounded-md bg-[#39404b] px-4 py-2 text-sm text-white hover:bg-[#454d5a]">
+                {% trans "Previous" %}
+              </a>
+            {% endif %}
+            <span class="text-sm text-gray-400">
+              {{ page.number }} / {{ page.paginator.num_pages }}
+            </span>
+            {% if page.has_next %}
+              <a href="?{{ query_without_page }}{% if query_without_page %}&{% endif %}page={{ page.next_page_number }}"
+                 class="rounded-md bg-[#39404b] px-4 py-2 text-sm text-white hover:bg-[#454d5a]">
+                {% trans "Next" %}
+              </a>
+            {% endif %}
+          </div>
+        {% endif %}
+      {% else %}
+        <div class="rounded-lg bg-[#2a2f35] px-6 py-20 text-center">
+          <h2 class="text-xl font-semibold text-white mb-2">{% trans "No matching items" %}</h2>
+          <p class="text-gray-400">{% trans "Try a different field or a shorter keyword." %}</p>
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="rounded-lg bg-[#2a2f35] px-6 py-16 text-center text-gray-400">
+        {% trans "Enter a category, screenwriter, director, actor, or title to search your library." %}
+      </div>
+    {% endif %}
+  </div>
+{% endblock content %}

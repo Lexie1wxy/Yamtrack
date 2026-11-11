@@ -1,7 +1,42 @@
+import json
+import logging
+from pathlib import Path
+
 from django.conf import settings
 
 from app import models
 from app.models import MediaTypes, Sources
+
+logger = logging.getLogger(__name__)
+
+_metadata_cache = {}
+_metadata_mtime = None
+
+
+def get_all_cached_metadata():
+    """Return all cached metadata for manual media items."""
+    global _metadata_cache, _metadata_mtime
+
+    metadata_path = Path(settings.BASE_DIR) / "manual-metadata.json"
+    try:
+        modified_time = metadata_path.stat().st_mtime_ns
+    except OSError:
+        return {}
+
+    if modified_time != _metadata_mtime:
+        try:
+            _metadata_cache = json.loads(metadata_path.read_text(encoding="utf-8"))
+            _metadata_mtime = modified_time
+        except (OSError, json.JSONDecodeError):
+            logger.exception("Unable to load manual metadata cache")
+            return {}
+
+    return _metadata_cache
+
+
+def get_cached_metadata(media_id):
+    """Return cached metadata for a manual media item."""
+    return get_all_cached_metadata().get(str(media_id), {})
 
 
 def metadata(media_id, media_type):
@@ -11,6 +46,7 @@ def metadata(media_id, media_type):
         media_type=media_type,
         source=Sources.MANUAL.value,
     )
+    cached = get_cached_metadata(media_id)
     response = {
         "media_id": item.media_id,
         "source": Sources.MANUAL.value,
@@ -18,11 +54,14 @@ def metadata(media_id, media_type):
         "title": item.title,
         "max_progress": None,
         "image": item.image,
-        "synopsis": "No synopsis available.",
-        "score": None,
-        "score_count": None,
-        "details": {},
+        "synopsis": cached.get("synopsis", "No synopsis available."),
+        "genres": cached.get("genres", []),
+        "score": cached.get("score"),
+        "score_count": cached.get("score_count"),
+        "details": dict(cached.get("details", {})),
         "related": {},
+        "external_links": dict(cached.get("external_links", {})),
+        "source_url": cached.get("url", ""),
     }
 
     if media_type in {MediaTypes.TV.value, MediaTypes.SEASON.value}:
@@ -30,11 +69,23 @@ def metadata(media_id, media_type):
         if season_items.count() > 0:
             response["details"]["seasons"] = season_items.count()
 
-        num_episodes = process_seasons(season_items, response)
-        response["max_progress"] = num_episodes
-        response["details"]["episodes"] = num_episodes
+        tracked_episodes = process_seasons(season_items, response)
+        cached_episode_count = int(response["details"].get("episodes") or 0)
+        num_episodes = max(tracked_episodes, cached_episode_count)
+        response["max_progress"] = num_episodes or None
+        response["details"]["episodes"] = num_episodes or None
     elif media_type == MediaTypes.MOVIE.value:
         response["max_progress"] = 1
+
+    for key, value in response.items():
+        if not key.startswith("season/"):
+            continue
+        value["synopsis"] = response["synopsis"]
+        value["genres"] = response["genres"]
+        value["score"] = response["score"]
+        value["score_count"] = response["score_count"]
+        value["external_links"] = response["external_links"]
+        value["source_url"] = response["source_url"]
 
     return response
 

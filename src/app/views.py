@@ -27,6 +27,7 @@ from app.models import (
     Episode,
     Item,
     MediaTypes,
+    Movie,
     Season,
     Sources,
     Status,
@@ -61,12 +62,12 @@ def home(request):
 
     # If this is an HTMX request to load more items for a specific media type
     if request.headers.get("HX-Request") and media_type_to_load:
-        list_by_type = home_helpers.get_home_media_types(
+        list_by_type = home_helpers.get_home_tv_media_types(
             request,
             sort_by,
             section_to_load,
-            items_limit,
-            media_type_to_load,
+            None,
+            page_start=items_limit,
             hide_unreleased=hide_unreleased,
         )
         return render(
@@ -74,7 +75,7 @@ def home(request):
             "app/components/home_grid.html",
             {
                 "media_list": list_by_type.get(
-                    media_type_to_load,
+                    MediaTypes.TV.value,
                     {"items": [], "total": 0},
                 ),
                 "home_status": section_to_load,
@@ -84,7 +85,7 @@ def home(request):
     home_sections = [
         home_helpers.build_home_section(
             section_key,
-            home_helpers.get_home_media_types(
+            home_helpers.get_home_tv_media_types(
                 request,
                 sort_by,
                 section_key,
@@ -158,6 +159,35 @@ def progress_edit(request, media_type, instance_id):
         "app/components/progress_changer.html",
         context,
     )
+
+
+@require_POST
+def quick_status(request, media_type, instance_id):
+    """Move a TV show to Dropped or Planning from a home card."""
+    status = request.POST.get("status")
+    if status not in {Status.DROPPED.value, Status.PLANNING.value}:
+        return HttpResponseBadRequest(_("Invalid status"))
+
+    media = helpers.get_owned_media_or_404(request, media_type, instance_id)
+    if isinstance(media, TV):
+        tv = media
+    elif isinstance(media, Season):
+        tv = media.related_tv
+    else:
+        return HttpResponseBadRequest(_("Invalid media type"))
+
+    tv.status = status
+    tv.save(update_fields=["status"])
+
+    if status == Status.PLANNING.value:
+        for season in tv.seasons.exclude(
+            status__in=[Status.COMPLETED.value, Status.PLANNING.value],
+        ):
+            season.status = status
+            season.save(update_fields=["status"])
+
+    logger.info("Moved %s to %s from the home page", tv, status)
+    return helpers.redirect_back(request)
 
 
 @login_not_required
@@ -297,7 +327,6 @@ def media_search(request):
         query,
         page,
         source,
-        show_adult_titles=request.user.show_adult_titles,
     )
 
     # Enrich search results with user tracking data
@@ -314,6 +343,132 @@ def media_search(request):
     }
 
     return render(request, "app/search.html", context)
+
+
+@require_GET
+def manual_metadata_search(request):
+    """Search locally cached metadata for manual movie and TV entries."""
+    query = request.GET.get("q", "").strip()
+    field = request.GET.get("field", "all")
+    media_type_filter = request.GET.get("media_type", "all")
+    status_filter = request.GET.get("status", "all")
+
+    field_options = [
+        ("all", "All fields / 全部字段"),
+        ("genre", "Category / 分类"),
+        ("screenwriter", "Screenwriter / 编剧"),
+        ("director", "Director / 导演"),
+        ("actor", "Lead actor / 主演"),
+        ("title", "Title / 标题"),
+    ]
+    media_type_options = [
+        ("all", "Movies and TV / 电影和电视剧"),
+        ("movie", "Movies / 电影"),
+        ("tv", "TV Shows / 电视剧"),
+    ]
+    status_choices = [("all", "All statuses / 全部状态"), *Status.choices]
+
+    items = Item.objects.filter(
+        source=Sources.MANUAL.value,
+        media_type__in=[MediaTypes.MOVIE.value, MediaTypes.TV.value],
+    ).select_related()
+    cached_metadata = manual.get_all_cached_metadata()
+
+    media_entries = {}
+    for media in Movie.objects.filter(
+        user=request.user,
+        item__source=Sources.MANUAL.value,
+    ).select_related("item").order_by("item_id", "-created_at"):
+        key = (MediaTypes.MOVIE.value, media.item.media_id)
+        media_entries.setdefault(key, media)
+    for media in TV.objects.filter(
+        user=request.user,
+        item__source=Sources.MANUAL.value,
+    ).select_related("item"):
+        key = (MediaTypes.TV.value, media.item.media_id)
+        media_entries.setdefault(key, media)
+
+    results = []
+    if query:
+        terms = [term.casefold() for term in query.split()]
+        valid_fields = {value for value, _label in field_options}
+        if field not in valid_fields:
+            field = "all"
+
+        for item in items:
+            key = (item.media_type, item.media_id)
+            media = media_entries.get(key)
+            if media is None:
+                continue
+            if (
+                media_type_filter != "all"
+                and item.media_type != media_type_filter
+            ):
+                continue
+            if status_filter != "all" and media.status != status_filter:
+                continue
+
+            cached = cached_metadata.get(str(item.media_id), {})
+            details = cached.get("details", {})
+            values_by_field = {
+                "title": [item.title, cached.get("title", "")],
+                "genre": [
+                    " ".join(cached.get("genres", [])),
+                    str(details.get("genres", "")),
+                ],
+                "screenwriter": [str(details.get("screenwriters", ""))],
+                "director": [str(details.get("directors", ""))],
+                "actor": [str(details.get("actors", ""))],
+            }
+            if field == "all":
+                search_values = [
+                    value
+                    for values in values_by_field.values()
+                    for value in values
+                ]
+                search_values.extend(
+                    str(value)
+                    for value in details.values()
+                    if not isinstance(value, (list, dict))
+                )
+                search_values.append(cached.get("synopsis", ""))
+            else:
+                search_values = values_by_field[field]
+
+            haystack = " ".join(str(value) for value in search_values).casefold()
+            if all(term in haystack for term in terms):
+                results.append(
+                    {
+                        "item": item,
+                        "media": media,
+                        "title": item.title,
+                        "genres": cached.get("genres", []),
+                        "screenwriters": details.get("screenwriters", ""),
+                        "directors": details.get("directors", ""),
+                        "actors": details.get("actors", ""),
+                    },
+                )
+
+    results.sort(key=lambda result: result["item"].title.casefold())
+    paginator = Paginator(results, 24)
+    page = paginator.get_page(request.GET.get("page", 1))
+    query_without_page = request.GET.copy()
+    query_without_page.pop("page", None)
+
+    context = {
+        "page": page,
+        "results": page.object_list,
+        "query": query,
+        "field": field,
+        "media_type_filter": media_type_filter,
+        "status_filter": status_filter,
+        "field_options": field_options,
+        "media_type_options": media_type_options,
+        "status_choices": status_choices,
+        "query_without_page": query_without_page.urlencode(),
+        "total_results": len(results),
+    }
+    return render(request, "app/manual_metadata_search.html", context)
 
 
 @require_GET

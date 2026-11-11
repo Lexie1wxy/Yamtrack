@@ -8,6 +8,7 @@ register_converter(converters.SourceChecker, "source")
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("advanced-search", views.manual_metadata_search, name="manual_metadata_search"),
     path("<str:username>/<media_type:media_type>", views.media_list, name="medialist"),
     path("search", views.media_search, name="search"),
     path(
@@ -49,6 +50,11 @@ urlpatterns = [
         "progress_edit/<media_type:media_type>/<int:instance_id>",
         views.progress_edit,
         name="progress_edit",
+    ),
+    path(
+        "quick_status/<media_type:media_type>/<int:instance_id>",
+        views.quick_status,
+        name="quick_status",
     ),
     path("media_save", views.media_save, name="media_save"),
     path("media_delete", views.media_delete, name="media_delete"),

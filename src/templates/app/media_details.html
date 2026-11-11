@@ -9,6 +9,8 @@
   - Yamtrack
 {% endblock title %}
 
+{% block content_container_class %}w-full px-8 py-12{% endblock %}
+
 {% block content %}
   {% trans "Unknown" as unknown_label %}
   {% trans "Show less" as show_less_label %}
@@ -26,7 +28,7 @@
              x-data="{ trackOpen: false, createOpen: false, menuOpen: false }"
              @click.away="menuOpen = false"
              @keydown.escape.window="trackOpen = false; createOpen = false; menuOpen = false">
-          <button class="p-3 flex-1 text-center font-medium text-white transition duration-300 cursor-pointer {% if user_medias %}{{ current_instance.status|status_button_color }}{% else %}bg-gray-600 hover:bg-gray-700{% endif %} {% if user_medias and media_type != MediaTypes.TV.value and media_type != MediaTypes.SEASON.value %}rounded-l-lg{% else %}rounded-lg{% endif %}"
+          <button class="p-3 flex-1 text-center font-medium text-white transition duration-300 cursor-pointer {% if user_medias %}{{ current_instance.status|status_background_color }}{% else %}bg-gray-600 hover:bg-gray-700{% endif %} {% if user_medias and media_type != MediaTypes.TV.value and media_type != MediaTypes.SEASON.value %}rounded-l-lg{% else %}rounded-lg{% endif %}"
                   hx-get="{% media_view_url 'track_modal' media %}"
                   hx-vals='{"return_url": "{{ request.get_full_path|urlencode }}", "instance_id": "{{ current_instance.id }}"}'
                   hx-target="#{% component_id 'track' media current_instance.id %}"
@@ -41,7 +43,7 @@
 
           {% if user_medias and media_type != MediaTypes.TV.value and media_type != MediaTypes.SEASON.value %}
             {# Dropdown with more tracking options #}
-            <button class="px-3 rounded-r-lg {{ current_instance.status|status_button_color }} border-l border-white/30 text-white transition duration-300 cursor-pointer"
+            <button class="px-3 rounded-r-lg {{ current_instance.status|status_background_color }} border-l border-white/30 text-white transition duration-300 cursor-pointer"
                     title="{% trans 'More tracking options' %}"
                     @click="menuOpen = !menuOpen">
               <div class="w-4 h-4 transition-transform"
@@ -244,6 +246,49 @@
       </div>
     </div>
 
+    {# Full-width media details #}
+    <section class="mb-10">
+      <h2 class="text-xl font-bold mb-4">{% trans "Details" %}</h2>
+      {% if media.details.items %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {% for key, value in media.details.items %}
+            <div class="bg-[#2a2f35] rounded-lg px-4 py-3 min-w-0">
+              <h3 class="text-xs font-semibold text-gray-400 uppercase mb-1">{{ key|title }}</h3>
+              <div class="text-sm text-gray-200 break-words">
+                {% if value|is_list %}
+                  {% for item in value %}<p>{{ item|iso_date_format:request.user }}</p>{% endfor %}
+                {% else %}
+                  <p>{{ value|default_if_none:unknown_label|iso_date_format:request.user }}</p>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+
+          <div class="bg-[#2a2f35] rounded-lg px-4 py-3 min-w-0">
+            <h3 class="text-xs font-semibold text-gray-400 uppercase mb-1">{% trans "Provider" %}</h3>
+            <a href="{{ media.source_url }}"
+               class="text-sm text-gray-200 break-words hover:text-indigo-400 transition-colors duration-200"
+               target="_blank">{{ media.source|source_readable }}</a>
+          </div>
+
+          {% if media.external_links %}
+            <div class="bg-[#2a2f35] rounded-lg px-4 py-3 min-w-0">
+              <h3 class="text-xs font-semibold text-gray-400 uppercase mb-1">{% trans "Links" %}</h3>
+              <div class="text-sm text-gray-200">
+                {% for name, url in media.external_links.items %}
+                  <a href="{{ url }}"
+                     class="block break-words hover:text-indigo-400 transition-colors duration-200"
+                     target="_blank">{{ name }}</a>
+                {% endfor %}
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="bg-[#2a2f35] rounded-lg px-4 py-3 text-sm text-gray-200">{% trans "No details available" %}</div>
+      {% endif %}
+    </section>
+
     {# Bottom section #}
     <div class="flex flex-col md:flex-row gap-12 md:gap-10">
       {# Sidebar #}
@@ -375,44 +420,6 @@
           </button>
         </div>
 
-        {# Media Details #}
-        <h2 class="text-xl font-bold mb-4">{% trans "Details" %}</h2>
-        <div class="bg-[#2a2f35] rounded-lg divide-y divide-white/5">
-          {% if media.details.items %}
-            {% for key, value in media.details.items %}
-              <div class="flex justify-between gap-x-4 px-4 py-2.5">
-                <h3 class="text-xs font-semibold text-gray-400 uppercase shrink-0 mt-0.5">{{ key|media_detail_label }}</h3>
-                <div class="text-sm text-gray-200 text-right">
-                  {% if value|is_list %}
-                    {% for item in value %}<p>{{ item|iso_date_format:request.user }}</p>{% endfor %}
-                  {% else %}
-                    <p>{{ value|default_if_none:unknown_label|iso_date_format:request.user }}</p>
-                  {% endif %}
-                </div>
-              </div>
-            {% endfor %}
-            <div class="flex justify-between gap-x-4 px-4 py-2.5">
-              <h3 class="text-xs font-semibold text-gray-400 uppercase shrink-0 mt-0.5">{% trans "Provider" %}</h3>
-              <a href="{{ media.source_url }}"
-                 class="text-sm text-gray-200 text-right hover:text-indigo-400 transition-colors duration-200"
-                 target="_blank">{{ media.source|source_readable }}</a>
-            </div>
-            {% if media.external_links %}
-              <div class="flex justify-between gap-x-4 px-4 py-2.5">
-                <h3 class="text-xs font-semibold text-gray-400 uppercase shrink-0 mt-0.5">{% trans "Links" %}</h3>
-                <div class="text-right">
-                  {% for name, url in media.external_links.items %}
-                    <a href="{{ url }}"
-                       class="block text-sm text-gray-200 hover:text-indigo-400 transition-colors duration-200"
-                       target="_blank">{{ name }}</a>
-                  {% endfor %}
-                </div>
-              </div>
-            {% endif %}
-          {% else %}
-            <div class="px-4 py-3 text-sm text-gray-200">{% trans "No details available" %}</div>
-          {% endif %}
-        </div>
       </div>
 
       {# Tab content #}
@@ -448,7 +455,7 @@
             {% if related_items %}
               <section class="mb-8"
                        x-show="tab === 'overview' || tab === 'related-{{ forloop.counter }}'">
-                <h2 class="text-xl font-bold mb-4">{{ name|related_section_label }}</h2>
+                <h2 class="text-xl font-bold mb-4">{{ name|title }}</h2>
                 <div class="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4">
                   {% for result in related_items %}
                     {# Set active to highlight the current movie in a collection. Avoid TV media, since seasons have same ID as the parent show #}
@@ -509,9 +516,6 @@
                   {% if media.media_type != MediaTypes.MOVIE.value %}
                     <p class="text-xs text-gray-400 mt-1">
                       {{ user_media.formatted_progress }}
-                      {% if media.media_type != MediaTypes.GAME.value %}
-                        {{ media_type|unit_for_count:user_media.progress|lower }}
-                      {% endif %}
                     </p>
                   {% endif %}
 
@@ -671,14 +675,11 @@
               <h2 class="text-xl font-bold mb-4">{% trans "Streaming" %}</h2>
               {% if watch_provider_region == "UNSET" %}
                 {% url 'preferences' as preferences_url %}
-                {# Translators: In "Watch provider region is not configured. Set a region or disable this feature in preferences.", this is the linked text. #}
-                {% trans "preferences" as link_label %}
-                {% with html_class="text-indigo-400 hover:text-indigo-300 hover:underline" %}
-                  {% inline_link preferences_url html_class link_label as preferences_link %}
-                  {% blocktrans trimmed %}
-                    Watch provider region is not configured. Set a region or disable this feature in {{ preferences_link }}.
-                  {% endblocktrans %}
-                {% endwith %}
+                <p class="text-sm text-gray-400 flex items-center gap-2">
+                  {% trans "Watch provider region is not configured. Set a region or disable this feature in" %}
+                  <a href="{{ preferences_url }}"
+                     class="text-indigo-400 hover:text-indigo-300 hover:underline">{% trans "preferences" %}</a>.
+                </p>
               {% else %}
                 <div class="flex flex-wrap gap-3">
                   {% for provider in watch_providers %}
