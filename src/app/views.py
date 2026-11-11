@@ -16,6 +16,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
+from simple_history.utils import bulk_create_with_history, bulk_update_with_history
 
 from app import config, helpers, history_processor
 from app import home as home_helpers
@@ -712,6 +713,97 @@ def sync_metadata(request, source, media_type, media_id, season_number=None):
     return helpers.redirect_back(request)
 
 
+def _get_progress_season(media, season_number=None):
+    """Return the season whose episode progress should be edited."""
+    if isinstance(media, Season):
+        return media
+    if not isinstance(media, TV):
+        return None
+
+    seasons = media.seasons.select_related("item")
+    if season_number is not None:
+        return seasons.filter(item__season_number=season_number).first()
+
+    return (
+        seasons.filter(status=Status.IN_PROGRESS.value)
+        .order_by("item__season_number")
+        .first()
+        or seasons.exclude(status=Status.COMPLETED.value)
+        .order_by("item__season_number")
+        .first()
+        or seasons.order_by("-item__season_number").first()
+    )
+
+
+def _get_season_episode_limit(season):
+    """Return the known episode count for a season."""
+    tv_metadata = services.get_media_metadata(
+        MediaTypes.TV.value,
+        season.item.media_id,
+        season.item.source,
+    )
+    tv_details = tv_metadata.get("details", {})
+    try:
+        cached_episodes = int(tv_details.get("episodes") or 0)
+        season_count = int(tv_details.get("seasons") or 0)
+    except (TypeError, ValueError):
+        cached_episodes = 0
+        season_count = 0
+    if cached_episodes and season_count <= 1:
+        return cached_episodes
+
+    metadata = services.get_media_metadata(
+        MediaTypes.SEASON.value,
+        season.item.media_id,
+        season.item.source,
+        [season.item.season_number],
+    )
+    try:
+        return int(metadata.get("max_progress") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _set_current_episode(season, episode_number):
+    """Set a season's latest watched episode without deleting prior history."""
+    watched_at = timezone.now().replace(second=0, microsecond=0)
+    episode_item = season.get_episode_item(episode_number)
+    episode = (
+        season.episodes.filter(item=episode_item).order_by("-created_at").first()
+    )
+    if episode:
+        episode.end_date = watched_at
+        bulk_update_with_history([episode], Episode, ["end_date"])
+    else:
+        episode = Episode(
+            related_season=season,
+            item=episode_item,
+            end_date=watched_at,
+        )
+        bulk_create_with_history([episode], Episode)
+
+    max_episodes = _get_season_episode_limit(season)
+    target_status = (
+        Status.COMPLETED.value
+        if max_episodes and episode_number >= max_episodes
+        else Status.IN_PROGRESS.value
+    )
+    if season.status != target_status:
+        season.status = target_status
+        bulk_update_with_history([season], Season, ["status"])
+
+    tv = season.related_tv
+    incomplete_seasons = tv.seasons.exclude(status=Status.COMPLETED.value).exists()
+    target_tv_status = (
+        Status.IN_PROGRESS.value
+        if incomplete_seasons
+        else Status.COMPLETED.value
+    )
+    if tv.status != target_tv_status:
+        tv.status = target_tv_status
+        bulk_update_with_history([tv], TV, ["status"])
+
+
 @require_GET
 def track_modal(
     request,
@@ -750,6 +842,9 @@ def track_modal(
         "season_number": season_number,
         "instance_id": instance_id,
     }
+    progress_season = _get_progress_season(media) if media else None
+    if progress_season:
+        initial_data["current_episode"] = progress_season.progress or None
 
     if media:
         title = media.item
@@ -766,6 +861,9 @@ def track_modal(
             title += f" S{season_number}"
 
     form = get_form_class(media_type)(instance=media, initial=initial_data)
+    max_episodes = (
+        _get_season_episode_limit(progress_season) if progress_season else 0
+    )
 
     return render(
         request,
@@ -775,6 +873,11 @@ def track_modal(
             "form": form,
             "media": media,
             "return_url": request.GET["return_url"],
+            "progress_season": progress_season,
+            "current_episode": (
+                progress_season.progress or None if progress_season else None
+            ),
+            "max_episodes": max_episodes,
         },
     )
 
@@ -814,7 +917,44 @@ def media_save(request):
     form_class = get_form_class(media_type)
     form = form_class(request.POST, instance=instance)
     if form.is_valid():
+        current_episode_raw = request.POST.get("current_episode")
+        episode_error = False
+        try:
+            current_episode = (
+                int(current_episode_raw) if current_episode_raw else None
+            )
+        except ValueError:
+            current_episode = None
+            episode_error = True
+            messages.error(request, _("Current episode must be a number."))
+
+        progress_season = _get_progress_season(
+            form.instance,
+            request.POST.get("progress_season_number"),
+        )
+        if current_episode is not None and current_episode < 1:
+            episode_error = True
+            messages.error(request, _("Current episode must be at least 1."))
+        elif current_episode is not None and progress_season:
+            max_episodes = _get_season_episode_limit(progress_season)
+            if max_episodes and current_episode > max_episodes:
+                messages.error(
+                    request,
+                    _("Episode number cannot exceed %(max_episodes)s.")
+                    % {"max_episodes": max_episodes},
+                )
+                return helpers.redirect_back(request)
+
+        if episode_error:
+            return helpers.redirect_back(request)
+
         form.save()
+        if (
+            current_episode is not None
+            and progress_season
+            and current_episode != progress_season.progress
+        ):
+            _set_current_episode(progress_season, current_episode)
         logger.info("%s saved successfully.", form.instance)
     else:
         logger.error(form.errors.as_json())

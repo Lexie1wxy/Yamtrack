@@ -20,6 +20,26 @@
     {{ form.source }}
     {{ form.media_id }}
     {{ form.season_number }}
+    {% if progress_season %}
+      <input type="hidden"
+             name="progress_season_number"
+             value="{{ progress_season.item.season_number }}">
+      <div class="mb-5">
+        <label class="block text-sm font-medium mb-1 text-gray-300"
+               for="current-episode">
+          {% trans "Current episode" %}{% if max_episodes %} ({{ max_episodes }} {% trans "total" %}){% endif %}
+        </label>
+        <input id="current-episode"
+               name="current_episode"
+               type="number"
+               min="1"
+               {% if max_episodes %}max="{{ max_episodes }}"{% endif %}
+               value="{{ current_episode|default_if_none:'' }}"
+               placeholder="e.g. 8"
+               class="w-full p-2 bg-[#39404b] rounded-md text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-[#4a9eff]">
+        <p class="mt-1 text-xs text-gray-500">{% trans "Leave unchanged to keep the current progress." %}</p>
+      </div>
+    {% endif %}
 
     {% with total_fields=form.fields|length %}
       {% if total_fields > 8 %}<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">{% endif %}

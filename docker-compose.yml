@@ -22,6 +22,7 @@ services:
       - ./src/templates/app/media_details.html:/yamtrack/templates/app/media_details.html:ro
       - ./src/templates/app/components/home_section.html:/yamtrack/templates/app/components/home_section.html:ro
       - ./src/templates/app/components/home_grid.html:/yamtrack/templates/app/components/home_grid.html:ro
+      - ./src/templates/app/components/fill_track.html:/yamtrack/templates/app/components/fill_track.html:ro
       - ./src/templates/app/manual_metadata_search.html:/yamtrack/templates/app/manual_metadata_search.html:ro
     ports:
       - "8000:8000"
