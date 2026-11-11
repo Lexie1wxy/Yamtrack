@@ -1,6 +1,7 @@
 from django.utils.text import slugify
 
-from app.models import BasicMedia, MediaTypes, Status
+from app.models import BasicMedia, MediaTypes, Sources, Status
+from app.providers import manual
 
 
 def build_home_section(key, media_types):
@@ -95,6 +96,8 @@ def get_home_tv_media_types(
         seen.add(key)
         combined.append(season)
 
+    _annotate_manual_episode_totals(combined)
+
     if hide_unreleased:
         combined = [
             media
@@ -111,6 +114,28 @@ def get_home_tv_media_types(
             "total": total_count,
         },
     }
+
+
+def _annotate_manual_episode_totals(media_items):
+    """Use cached Douban episode totals when manual media has no events."""
+    cached_metadata = manual.get_all_cached_metadata()
+    for media in media_items:
+        if media.item.source != Sources.MANUAL.value:
+            continue
+        if (
+            media.item.media_type == MediaTypes.SEASON.value
+            and media.item.season_number not in (None, 1)
+        ):
+            continue
+
+        cached = cached_metadata.get(str(media.item.media_id), {})
+        try:
+            total_episodes = int(cached.get("details", {}).get("episodes") or 0)
+        except (TypeError, ValueError):
+            continue
+
+        if total_episodes > 0:
+            media.max_progress = total_episodes
 
 
 def _filter_home_media_types(media_types, predicate):

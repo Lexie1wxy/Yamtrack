@@ -71,6 +71,11 @@
 
     {% if home_status == Status.PLANNING.value %}
       {% if user.progress_bar %}<div class="h-1.25 {{ Status.PLANNING.value|status_background_color }}"></div>{% endif %}
+      {% if media.max_progress %}
+        <div class="px-3 pb-3 text-center text-xs text-gray-400">
+          {{ media.formatted_progress }} / {{ media.max_progress }}
+        </div>
+      {% endif %}
     {% else %}
       {% if media.item.media_type == MediaTypes.TV.value %}
         <div class="px-3 pb-3 text-center text-xs text-gray-400">
