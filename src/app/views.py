@@ -164,9 +164,9 @@ def progress_edit(request, media_type, instance_id):
 
 @require_POST
 def quick_status(request, media_type, instance_id):
-    """Move a TV show to Dropped or Planning from a home card."""
+    """Move a TV show to Dropped or Paused from a home card."""
     status = request.POST.get("status")
-    if status not in {Status.DROPPED.value, Status.PLANNING.value}:
+    if status not in {Status.DROPPED.value, Status.PAUSED.value}:
         return HttpResponseBadRequest(_("Invalid status"))
 
     media = helpers.get_owned_media_or_404(request, media_type, instance_id)

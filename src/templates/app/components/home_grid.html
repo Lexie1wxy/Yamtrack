@@ -51,11 +51,11 @@
                   hx-swap="none"
                   hx-disabled-elt="this">{% include "app/icons/list-add.svg" with classes="w-4 h-4" %}</button>
 
-          <button class="cursor-pointer rounded-full bg-emerald-600 p-2.5 text-white transition-all duration-200 hover:scale-110 hover:bg-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.5)]"
-                  title="{% trans 'Move to planning' %}"
-                  aria-label="{% trans 'Move to planning' %}"
+          <button class="cursor-pointer rounded-full bg-gray-600 p-2.5 text-white transition-all duration-200 hover:scale-110 hover:bg-gray-500 hover:shadow-[0_0_15px_rgba(107,114,128,0.5)]"
+                  title="{% trans 'Mark as paused' %}"
+                  aria-label="{% trans 'Mark as paused' %}"
                   hx-post="{% url 'quick_status' media.item.media_type media.id %}?next={{ request.get_full_path|urlencode }}"
-                  hx-vals='{"status": "Planning"}'
+                  hx-vals='{"status": "Paused"}'
                   hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                   hx-swap="none"
                   hx-disabled-elt="this">{% include "app/icons/clock.svg" with classes="w-4 h-4" %}</button>
