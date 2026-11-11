@@ -14,6 +14,13 @@
              src="{{ IMG_NONE }}">
       </a>
 
+      {% if media.manual_score is not None %}
+        <div class="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-md bg-black/85 px-2 py-1 shadow-md">
+          {% include "app/icons/star.svg" with classes="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" %}
+          <span class="text-xs font-semibold text-white">{{ media.manual_score }}</span>
+        </div>
+      {% endif %}
+
       {% if media.next_event and not media.next_event.is_max_datetime %}
         <div class="absolute top-2 left-1/2 flex max-w-[98%] -translate-x-1/2 items-center gap-1.5 rounded-md bg-black/80 px-2 py-1.5 shadow-md whitespace-nowrap">
           {% if home_status == Status.PLANNING.value %}
@@ -42,15 +49,6 @@
                   hx-trigger="click once"
                   @click="trackOpen = true">{% include "app/icons/edit.svg" with classes="w-4 h-4" %}</button>
 
-          <button class="cursor-pointer rounded-full bg-red-600 p-2.5 text-white transition-all duration-200 hover:scale-110 hover:bg-red-500 hover:shadow-[0_0_15px_rgba(220,38,38,0.5)]"
-                  title="{% trans 'Mark as dropped' %}"
-                  aria-label="{% trans 'Mark as dropped' %}"
-                  hx-post="{% url 'quick_status' media.item.media_type media.id %}?next={{ request.get_full_path|urlencode }}"
-                  hx-vals='{"status": "Dropped"}'
-                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                  hx-swap="none"
-                  hx-disabled-elt="this">{% include "app/icons/list-add.svg" with classes="w-4 h-4" %}</button>
-
           <button class="cursor-pointer rounded-full bg-gray-600 p-2.5 text-white transition-all duration-200 hover:scale-110 hover:bg-gray-500 hover:shadow-[0_0_15px_rgba(107,114,128,0.5)]"
                   title="{% trans 'Mark as paused' %}"
                   aria-label="{% trans 'Mark as paused' %}"
@@ -59,6 +57,15 @@
                   hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                   hx-swap="none"
                   hx-disabled-elt="this">{% include "app/icons/clock.svg" with classes="w-4 h-4" %}</button>
+
+          <button class="cursor-pointer rounded-full bg-red-600 p-2.5 text-white transition-all duration-200 hover:scale-110 hover:bg-red-500 hover:shadow-[0_0_15px_rgba(220,38,38,0.5)]"
+                  title="{% trans 'Mark as dropped' %}"
+                  aria-label="{% trans 'Mark as dropped' %}"
+                  hx-post="{% url 'quick_status' media.item.media_type media.id %}?next={{ request.get_full_path|urlencode }}"
+                  hx-vals='{"status": "Dropped"}'
+                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                  hx-swap="none"
+                  hx-disabled-elt="this">{% include "app/icons/list-add.svg" with classes="w-4 h-4" %}</button>
         </div>
       </div>
     </div>

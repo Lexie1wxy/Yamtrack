@@ -96,7 +96,7 @@ def get_home_tv_media_types(
         seen.add(key)
         combined.append(season)
 
-    _annotate_manual_episode_totals(combined)
+    _annotate_manual_metadata(combined)
 
     if hide_unreleased:
         combined = [
@@ -116,19 +116,20 @@ def get_home_tv_media_types(
     }
 
 
-def _annotate_manual_episode_totals(media_items):
-    """Use cached Douban episode totals when manual media has no events."""
+def _annotate_manual_metadata(media_items):
+    """Add cached Douban score and episode totals to manual media."""
     cached_metadata = manual.get_all_cached_metadata()
     for media in media_items:
         if media.item.source != Sources.MANUAL.value:
             continue
+        cached = cached_metadata.get(str(media.item.media_id), {})
+        media.manual_score = cached.get("score")
         if (
             media.item.media_type == MediaTypes.SEASON.value
             and media.item.season_number not in (None, 1)
         ):
             continue
 
-        cached = cached_metadata.get(str(media.item.media_id), {})
         try:
             total_episodes = int(cached.get("details", {}).get("episodes") or 0)
         except (TypeError, ValueError):
