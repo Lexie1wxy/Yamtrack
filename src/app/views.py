@@ -179,12 +179,11 @@ def quick_status(request, media_type, instance_id):
     tv.status = status
     tv.save(update_fields=["status"])
 
-    if status == Status.PLANNING.value:
-        for season in tv.seasons.exclude(
-            status__in=[Status.COMPLETED.value, Status.PLANNING.value],
-        ):
-            season.status = status
-            season.save(update_fields=["status"])
+    for season in tv.seasons.exclude(
+        status__in=[Status.COMPLETED.value, status],
+    ):
+        season.status = status
+        season.save(update_fields=["status"])
 
     logger.info("Moved %s to %s from the home page", tv, status)
     return helpers.redirect_back(request)
