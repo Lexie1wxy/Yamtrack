@@ -83,19 +83,7 @@ def get_home_tv_media_types(
         [],
     )
 
-    combined = list(tv_items)
-    seen = {(item.item.media_id, None) for item in tv_items}
-    for season in season_items:
-        season_number = season.item.season_number
-        if season_number in (None, 1):
-            key = (season.item.media_id, None)
-        else:
-            key = (season.item.media_id, season_number)
-        if key in seen:
-            continue
-        seen.add(key)
-        combined.append(season)
-
+    combined = combine_tv_and_seasons(tv_items, season_items)
     _annotate_manual_metadata(combined)
 
     if hide_unreleased:
@@ -109,11 +97,100 @@ def get_home_tv_media_types(
     total_count = len(combined)
     page_end = None if items_limit is None else page_start + items_limit
     return {
-        MediaTypes.TV.value: {
+        MediaTypes.SEASON.value: {
             "items": combined[page_start:page_end],
             "total": total_count,
         },
     }
+
+
+def get_tv_season_media_list(user, status_filter, sort_filter, search=""):
+    """Return a filtered, sorted list of TV parents and unique seasons."""
+    tv_items = list(
+        BasicMedia.objects.get_media_list(
+            user=user,
+            media_type=MediaTypes.TV.value,
+            status_filter=status_filter,
+            sort_filter=None,
+            search=search,
+        ),
+    )
+    season_items = list(
+        BasicMedia.objects.get_media_list(
+            user=user,
+            media_type=MediaTypes.SEASON.value,
+            status_filter=status_filter,
+            sort_filter=None,
+            search=search,
+        ),
+    )
+
+    if tv_items:
+        BasicMedia.objects.annotate_max_progress(tv_items, MediaTypes.TV.value)
+    if season_items:
+        BasicMedia.objects.annotate_max_progress(
+            season_items,
+            MediaTypes.SEASON.value,
+        )
+
+    combined = combine_tv_and_seasons(tv_items, season_items)
+    _annotate_manual_metadata(combined)
+    return _sort_tv_season_media(combined, sort_filter)
+
+
+def combine_tv_and_seasons(tv_items, season_items):
+    """Keep TV parents and only non-duplicate season records."""
+    combined = list(tv_items)
+    seen = {(item.item.source, item.item.media_id, None) for item in tv_items}
+    for season in season_items:
+        season_number = season.item.season_number
+        if season_number in (None, 1):
+            key = (season.item.source, season.item.media_id, None)
+        else:
+            key = (season.item.source, season.item.media_id, season_number)
+        if key in seen:
+            continue
+        seen.add(key)
+        combined.append(season)
+    return combined
+
+
+def _sort_tv_season_media(media_items, sort_filter):
+    """Sort a combined TV parent and season list."""
+    def title(media):
+        return media.item.title.casefold()
+
+    if sort_filter == "title":
+        return sorted(media_items, key=title)
+    if sort_filter == "progress":
+        return sorted(media_items, key=lambda media: (-media.progress, title(media)))
+    if sort_filter == "start_date":
+        return sorted(
+            media_items,
+            key=lambda media: (
+                media.start_date is None,
+                media.start_date.timestamp() if media.start_date else 0,
+                title(media),
+            ),
+        )
+    if sort_filter == "end_date":
+        return sorted(
+            media_items,
+            key=lambda media: (
+                media.end_date is None,
+                -media.end_date.timestamp() if media.end_date else 0,
+                title(media),
+            ),
+        )
+
+    return sorted(
+        media_items,
+        key=lambda media: (
+            media.score is None,
+            -float(media.score or 0),
+            title(media),
+        ),
+    )
 
 
 def _annotate_manual_metadata(media_items):

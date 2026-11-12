@@ -91,21 +91,23 @@
 
                 {% get_sidebar_media_types user as sidebar_media_types %}
                 {% for item in sidebar_media_types %}
-                  <li>
-                    {% if target_user is None or target_user == request.user %}
-                      <a href="{% url 'medialist' username=user.username media_type=item.media_type %}"
-                         class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if media_type == item.media_type %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
-                        {% icon item.media_type is_active=media_type|str_equals:item.media_type %}
-                        <span>{{ item.display_name }}</span>
-                      </a>
-                    {% else %}
-                      <a href="{% url 'medialist' username=user.username media_type=item.media_type %}"
-                         class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm text-gray-400 hover:text-white hover:bg-[#23272b]">
-                        {% icon item.media_type is_active=False %}
-                        <span>{{ item.display_name }}</span>
-                      </a>
-                    {% endif %}
-                  </li>
+                  {% if item.media_type != MediaTypes.TV.value %}
+                    <li>
+                      {% if target_user is None or target_user == request.user %}
+                        <a href="{% url 'medialist' username=user.username media_type=item.media_type %}"
+                           class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm {% if media_type == item.media_type %}text-white bg-[#2c3136]{% else %}text-gray-400 hover:text-white hover:bg-[#23272b]{% endif %}">
+                          {% icon item.media_type is_active=media_type|str_equals:item.media_type %}
+                          <span>{{ item.display_name }}</span>
+                        </a>
+                      {% else %}
+                        <a href="{% url 'medialist' username=user.username media_type=item.media_type %}"
+                           class="flex items-center space-x-3 px-4 py-2 rounded-md transition-colors duration-200 text-sm text-gray-400 hover:text-white hover:bg-[#23272b]">
+                          {% icon item.media_type is_active=False %}
+                          <span>{{ item.display_name }}</span>
+                        </a>
+                      {% endif %}
+                    </li>
+                  {% endif %}
                 {% endfor %}
               </ul>
             {% endblock sidebar_own_media %}
@@ -267,13 +269,19 @@
                 {% else %}
                   {% firstof media_type user.last_search_type as search_type %}
                 {% endif %}
+                {% if search_type == MediaTypes.TV.value %}
+                  {% trans "TV Seasons" as search_type_display %}
+                {% else %}
+                  {% firstof search_type|media_type_readable_plural as search_type_display %}
+                {% endif %}
+                {% trans "TV Seasons" as tv_seasons_label %}
 
                 {# Search bar #}
                 {% block search_bar %}
                   <div class="relative w-full max-w-2xl">
                     <form method="get"
                           action="{% url 'search' %}"
-                          x-data=" { isOpen: false, selectedType: { display: '{{ search_type|media_type_readable_plural }}', value: '{{ search_type }}' }, mediaTypes: {% get_search_media_types user as search_types %}{{ search_types }}, getPlaceholder() { return `Search ${this.selectedType.display.toLowerCase()}...` }, selectType(type) { this.selectedType = type; this.isOpen = false; const username = '{{ request.user.username|escapejs }}'; if (window.location.pathname === '/') { window.location.assign(`/${username}/${type.value}?status=Planning&layout=grid`); return; } const match = window.location.pathname.match(/^\/([^/]+)\/(movie|tv)$/); if (match && match[2] !== type.value) { const url = new URL(window.location.href); url.pathname = `/${match[1]}/${type.value}`; window.location.assign(url.toString()); } } }">
+                          x-data=" { isOpen: false, selectedType: { display: '{{ search_type_display }}', value: '{{ search_type }}' }, mediaTypes: {% get_search_media_types user as search_types %}{{ search_types }}.map(type => type.value === '{{ MediaTypes.TV.value }}' ? { ...type, display: '{{ tv_seasons_label|escapejs }}' } : type), getPlaceholder() { return `Search ${this.selectedType.display.toLowerCase()}...` }, selectType(type) { this.selectedType = type; this.isOpen = false; const username = '{{ request.user.username|escapejs }}'; if (window.location.pathname === '/') { window.location.assign(`/${username}/${type.value}?status=Planning&layout=grid`); return; } const match = window.location.pathname.match(/^\/([^/]+)\/(movie|tv)$/); if (match && match[2] !== type.value) { const url = new URL(window.location.href); url.pathname = `/${match[1]}/${type.value}`; window.location.assign(url.toString()); } } }">
                       <div class="flex">
                         <div class="relative grow">
                           {# Search input #}

@@ -81,7 +81,7 @@ def home(request):
             "app/components/home_grid.html",
             {
                 "media_list": list_by_type.get(
-                    MediaTypes.TV.value,
+                    MediaTypes.SEASON.value,
                     {"items": [], "total": 0},
                 ),
                 "home_status": section_to_load,
@@ -200,6 +200,17 @@ def quick_status(request, media_type, instance_id):
 def media_list(request, username, media_type):
     """Return the media list page."""
     target_user = get_object_or_404(User, username=username)
+    enabled_media_types = target_user.get_enabled_media_types()
+
+    if (
+        media_type == MediaTypes.TV.value
+        and MediaTypes.SEASON.value in enabled_media_types
+    ):
+        return redirect(
+            "medialist",
+            username=target_user.username,
+            media_type=MediaTypes.SEASON.value,
+        )
 
     # if user is looking at own page then update preferences
     if request.user == target_user:
@@ -221,7 +232,6 @@ def media_list(request, username, media_type):
             msg = "User not found"
             raise Http404(msg)
 
-        enabled_media_types = target_user.get_enabled_media_types()
         if not enabled_media_types:
             msg = "User doesn't have any media types enabled"
             raise Http404(msg)
@@ -254,23 +264,32 @@ def media_list(request, username, media_type):
         status_filter = MediaStatusChoices.ALL
 
     # Get media list with filters applied
-    media_queryset = BasicMedia.objects.get_media_list(
-        user=target_user,
-        media_type=media_type,
-        status_filter=status_filter,
-        sort_filter=sort_filter,
-        search=search_query,
-    )
+    if media_type == MediaTypes.SEASON.value:
+        media_items = home_helpers.get_tv_season_media_list(
+            target_user,
+            status_filter,
+            sort_filter,
+            search_query,
+        )
+    else:
+        media_items = BasicMedia.objects.get_media_list(
+            user=target_user,
+            media_type=media_type,
+            status_filter=status_filter,
+            sort_filter=sort_filter,
+            search=search_query,
+        )
 
     # Paginate results
     items_per_page = 32
-    paginator = Paginator(media_queryset, items_per_page)
+    paginator = Paginator(media_items, items_per_page)
     media_page = paginator.get_page(page)
 
-    BasicMedia.objects.annotate_max_progress(
-        media_page.object_list,
-        media_type,
-    )
+    if media_type != MediaTypes.SEASON.value:
+        BasicMedia.objects.annotate_max_progress(
+            media_page.object_list,
+            media_type,
+        )
 
     context = {
         "media_type": media_type,
