@@ -995,10 +995,12 @@ def media_save(request):
             episode_error = True
             messages.error(request, _("Current episode must be a number."))
 
-        progress_season = _get_progress_season(
-            form.instance,
-            request.POST.get("progress_season_number"),
-        )
+        progress_season = None
+        if current_episode is not None:
+            progress_season = _get_progress_season(
+                form.instance,
+                request.POST.get("progress_season_number"),
+            )
         if current_episode is not None and current_episode < 1:
             episode_error = True
             messages.error(request, _("Current episode must be at least 1."))
