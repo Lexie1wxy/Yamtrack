@@ -23,6 +23,7 @@ services:
       - ./src/app/urls.py:/yamtrack/app/urls.py:ro
       - ./src/config/urls.py:/yamtrack/config/urls.py:ro
       - ./src/templates/base.html:/yamtrack/templates/base.html:ro
+      - ./src/templates/app/home.html:/yamtrack/templates/app/home.html:ro
       - ./src/templates/app/media_list.html:/yamtrack/templates/app/media_list.html:ro
       - ./src/templates/app/media_details.html:/yamtrack/templates/app/media_details.html:ro
       - ./src/templates/app/components/home_section.html:/yamtrack/templates/app/components/home_section.html:ro
