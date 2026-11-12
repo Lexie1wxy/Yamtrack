@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     depends_on:
       - redis
+    extra_hosts:
+      - "api.themoviedb.org:18.244.214.79"
     environment:
       - TZ=Asia/Shanghai
       - SECRET=${SECRET:-longstring}
@@ -15,6 +17,7 @@ services:
       - ./posters:/yamtrack/staticfiles/posters
       - ./manual-metadata.json:/yamtrack/manual-metadata.json:ro
       - ./src/app/providers/manual.py:/yamtrack/app/providers/manual.py:ro
+      - ./src/app/providers/tmdb.py:/yamtrack/app/providers/tmdb.py:ro
       - ./src/app/home.py:/yamtrack/app/home.py:ro
       - ./src/app/views.py:/yamtrack/app/views.py:ro
       - ./src/app/urls.py:/yamtrack/app/urls.py:ro

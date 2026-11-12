@@ -1,7 +1,12 @@
 import logging
+import mimetypes
+import re
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlencode
 
+import requests
 from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
@@ -328,6 +333,8 @@ def media_search(request):
         page,
         source,
     )
+    if source == Sources.TMDB.value:
+        _precache_tmdb_images(data.get("results", []))
 
     # Enrich search results with user tracking data
     if data.get("results"):
@@ -343,6 +350,66 @@ def media_search(request):
     }
 
     return render(request, "app/search.html", context)
+
+
+@require_GET
+def tmdb_image(request, filename):  # noqa: ARG001 request
+    """Proxy TMDB posters through the accessible API CloudFront host."""
+    if ".." in filename or not re.fullmatch(r"[A-Za-z0-9._-]+", filename):
+        raise Http404
+
+    cached = _get_tmdb_image(filename)
+    if cached is None:
+        return HttpResponse(status=502)
+    content, content_type = cached
+    proxied = HttpResponse(content, content_type=content_type)
+    proxied["Cache-Control"] = "public, max-age=604800"
+    return proxied
+
+
+def _get_tmdb_image(filename):
+    """Return one cached TMDB poster, fetching it on first use."""
+    cache_dir = Path(settings.STATIC_ROOT) / "posters" / "tmdb"
+    cache_path = cache_dir / filename
+    if cache_path.is_file():
+        content_type = mimetypes.guess_type(cache_path.name)[0] or "image/jpeg"
+        return cache_path.read_bytes(), content_type
+
+    try:
+        response = requests.get(
+            f"https://media.themoviedb.org/t/p/w500/{filename}",
+            headers={
+                "Host": "image.tmdb.org",
+                "User-Agent": "Yamtrack/1.0",
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        return None
+
+    content_type = response.headers.get("Content-Type", "image/jpeg")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=cache_dir, delete=False) as temp_file:
+        temp_file.write(response.content)
+        temp_path = Path(temp_file.name)
+    temp_path.replace(cache_path)
+    return response.content, content_type
+
+
+def _precache_tmdb_images(results):
+    """Fetch a result page's TMDB posters concurrently."""
+    prefix = "/tmdb-image/"
+    filenames = {
+        result["image"][len(prefix) :]
+        for result in results
+        if str(result.get("image", "")).startswith(prefix)
+    }
+    if not filenames:
+        return
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(_get_tmdb_image, filenames))
 
 
 @require_GET

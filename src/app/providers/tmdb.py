@@ -526,7 +526,7 @@ def get_image_url(path):
     # when no image, value from response is null
     # e.g movie: 445290
     if path:
-        return f"https://image.tmdb.org/t/p/w500{path}"
+        return f"/tmdb-image/{path.lstrip('/')}"
     return settings.IMG_NONE
 
 

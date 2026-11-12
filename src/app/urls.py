@@ -11,6 +11,7 @@ urlpatterns = [
     path("advanced-search", views.manual_metadata_search, name="manual_metadata_search"),
     path("<str:username>/<media_type:media_type>", views.media_list, name="medialist"),
     path("search", views.media_search, name="search"),
+    path("tmdb-image/<str:filename>", views.tmdb_image, name="tmdb_image"),
     path(
         "details/<source:source>/<media_type:media_type>/<str:media_id>/<str:title>",
         views.media_details,
