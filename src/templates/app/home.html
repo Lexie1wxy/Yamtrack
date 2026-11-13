@@ -8,18 +8,18 @@
 
 {% block content %}
   <div class="space-y-8">
-    <nav class="flex flex-wrap items-center justify-end gap-x-5 gap-y-1 text-sm">
-      <a href="https://doramabase.com/ja/kr/2026/all"
-         target="_blank"
-         rel="noopener noreferrer"
-         class="font-medium text-indigo-300 transition-colors hover:text-indigo-200 hover:underline">Doramabase</a>
-      <a href="https://www.themoviedb.org/discover/tv"
-         target="_blank"
-         rel="noopener noreferrer"
-         class="font-medium text-indigo-300 transition-colors hover:text-indigo-200 hover:underline">TMDB Discover</a>
-    </nav>
-
     <div class="flex flex-col gap-4 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+      <nav class="flex flex-wrap items-center justify-center text-sm sm:col-start-1 sm:justify-self-start">
+        <a href="https://doramabase.com/ja/kr/2026/all"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="font-medium text-indigo-300 transition-colors hover:text-indigo-200 hover:underline">Doramabase</a>
+        <span class="mx-1 text-gray-500">｜</span>
+        <a href="https://www.themoviedb.org/discover/tv"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="font-medium text-indigo-300 transition-colors hover:text-indigo-200 hover:underline">TMDB Discover</a>
+      </nav>
       <h1 class="text-3xl font-bold text-center sm:col-start-2 sm:justify-self-center">{% trans "Home" %}</h1>
       <div class="flex flex-wrap items-center justify-center gap-3 sm:col-start-3 sm:justify-self-end">
         <a href="{% url 'home' %}?sort={{ current_sort }}{% if hide_unreleased %}&hide_unreleased=false{% else %}&hide_unreleased=true{% endif %}"
